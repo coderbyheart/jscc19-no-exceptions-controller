@@ -1,6 +1,6 @@
 import { pipe } from 'fp-ts/lib/pipeable';
-import { fold } from 'fp-ts/lib/Either';
-import { Either, right } from 'fp-ts/lib/Either';
+import { tryCatch } from 'fp-ts/lib/Either';
+import { Either, right, chain, fold } from 'fp-ts/lib/Either';
 
 export type ErrorResponse = {
 	errorType: string
@@ -19,23 +19,21 @@ const step1 = (): Either<Error, string> => {
  *
  * @param step2 This is a "classical" error-throwing method (like from aws-sdk)
  */
-export const handler = async (step2: () => Promise<void>): Promise<string | ErrorResponse> =>
-	pipe(
-		// First step that could fail
+export const handler = async (step2: () => Promise<void>): Promise<string | ErrorResponse> => {
+	const id = 'foo';
+	return pipe(
 		step1(),
-		fold(
-			error => Promise.resolve(({
+		chain(() => tryCatch(() => step2(), error => new Error(`Error in step 2: ${error instanceof Error ? error.message : 'unknown'}`))),
+		fold<Error, Promise<void>, string | ErrorResponse>(
+			(error: Error) => ({
 				errorType: error.name,
-				message: 'Step 1 failed',
-			})) as Promise<string | ErrorResponse>, // FIXME: Why do I need this?!
-			async () => {
-				const id = 'foo'; // handler should return this on success
-				// FIXME: Turn this into a monad. On success return id, else return ErrorResponse
-				await step2();
-				return id;
-			},
+				message: 'Oops!',
+			}),
+			() => id,
 		),
 	);
+};
+
 
 const main = async () => {
 
